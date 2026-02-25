@@ -12,6 +12,7 @@ const tabDefs = [ {
     title: 'Timeline 时间线',
     options: [
       'show-contextual-statuses',
+      'collapse-repost-chain',
       'enrich-statuses',
       'auto-pager',
       'process-unread-statuses',
