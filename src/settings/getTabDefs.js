@@ -45,6 +45,7 @@ const tabDefs = [ {
   sections: [ {
     title: '功能',
     options: [
+      'custom-avatar',
       'remove-personalized-theme',
       'remove-app-recommendations',
     ],
