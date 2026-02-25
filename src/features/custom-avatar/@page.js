@@ -1,4 +1,9 @@
 import select from 'select-dom'
+import {
+  CUSTOM_AVATAR_STORAGE_AREA,
+  CUSTOM_AVATAR_STORAGE_KEY,
+} from './constants'
+import { STORAGE_CHANGED } from '@constants'
 import getLoggedInUserId from '@libs/getLoggedInUserId'
 
 const ATTRIBUTE_ORIGINAL_SRC = 'data-sf-custom-avatar-original-src'
@@ -107,17 +112,24 @@ function replaceAvatarImages({ userId, avatarUrl }) {
 }
 
 export default context => {
-  const { readOptionValue } = context
+  const {
+    requireModules,
+    registerBroadcastListener,
+    unregisterBroadcastListener,
+  } = context
+  const { storage } = requireModules([ 'storage' ])
   let mySpaceUserId = ''
 
-  function refreshCustomAvatar() {
-    const avatarUrl = (readOptionValue('url') || '').trim()
-
+  async function refreshCustomAvatar() {
+    const avatarUrl = await storage.read(
+      CUSTOM_AVATAR_STORAGE_KEY,
+      CUSTOM_AVATAR_STORAGE_AREA,
+    )
     mySpaceUserId = mySpaceUserId || normalizeUserId(getLoggedInUserId())
 
     restoreReplacedAvatarImages()
 
-    if (!avatarUrl || !mySpaceUserId) return
+    if (typeof avatarUrl !== 'string' || !avatarUrl || !mySpaceUserId) return
 
     replaceAvatarImages({
       userId: mySpaceUserId,
@@ -125,13 +137,34 @@ export default context => {
     })
   }
 
-  return {
-    onLoad() {
+  function onStorageChanged(message) {
+    if (message.action !== STORAGE_CHANGED) return
+
+    const { key, storageAreaName } = message.payload || {}
+    const isCustomAvatarStorageChanged = (
+      key === CUSTOM_AVATAR_STORAGE_KEY &&
+      storageAreaName === CUSTOM_AVATAR_STORAGE_AREA
+    )
+
+    if (isCustomAvatarStorageChanged) {
       refreshCustomAvatar()
+    }
+  }
+
+  registerBroadcastListener(onStorageChanged)
+
+  return {
+    async onLoad() {
+      await refreshCustomAvatar()
     },
 
     onSettingsChange() {
       refreshCustomAvatar()
+    },
+
+    onUnload() {
+      unregisterBroadcastListener(onStorageChanged)
+      restoreReplacedAvatarImages()
     },
   }
 }

@@ -4,6 +4,7 @@ import messaging from './messaging'
 import VersionHistory from './components/VersionHistory'
 import HelpAndSupport from './components/HelpAndSupport'
 import OAuthPanel from './components/OAuthPanel'
+import CustomAvatarPanel from './components/CustomAvatarPanel'
 import { GET_OPTION_DEFS } from '@constants'
 
 const tabDefs = [ {
@@ -49,6 +50,7 @@ const tabDefs = [ {
       'remove-personalized-theme',
       'remove-app-recommendations',
     ],
+    children: <CustomAvatarPanel />,
   }, {
     title: '细节',
     options: [
