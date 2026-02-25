@@ -9,11 +9,11 @@ const CLASSNAME_ORIGINAL = 'sf-collapse-repost-chain-original'
 const CLASSNAME_PREVIEW = 'sf-collapse-repost-chain-preview'
 const CLASSNAME_TOGGLE = 'sf-collapse-repost-chain-toggle'
 const SELECTOR_TOGGLE = `.${CLASSNAME_TOGGLE}`
-const REPOST_MARKER_REGEX = /\/\/\s*@[^:：\n]+\s*[:：]/g
-const MIN_REPOST_MARKERS = 4
-const MIN_REPOST_MARKERS_FOR_LONG_TEXT = 2
-const MIN_LONG_TEXT_LENGTH = 260
-const PREVIEW_LENGTH = 150
+const REPOST_MARKER_REGEX = /(?:\/\/|／／)\s*@[^:：\n]+\s*[:：]/g
+const MIN_REPOST_MARKERS = 2
+const MIN_REPOST_MARKERS_FOR_LONG_TEXT = 1
+const MIN_LONG_TEXT_LENGTH = 180
+const PREVIEW_LENGTH = 120
 
 function normalizeText(rawText = '') {
   return rawText
@@ -45,12 +45,12 @@ function createPreviewText(fullText) {
 function setCollapsedState(content, button, isCollapsed) {
   content.classList.toggle(CLASSNAME_COLLAPSED, isCollapsed)
   button.textContent = isCollapsed
-    ? '展开'
+    ? '展开转发链'
     : '收起'
 }
 
 function collapseStatus(li) {
-  const content = select(':scope > .content', li)
+  const content = select(':scope > .content', li) || select('.content', li)
 
   if (!content || content.hasAttribute(ATTRIBUTE_MARKER)) {
     return
@@ -135,6 +135,14 @@ function mutationObserverCallback(mutationRecords) {
   }
 }
 
+function collapseExistingStatuses() {
+  for (const li of select.all('#stream > ol > li')) {
+    if (isStatusElement(li)) {
+      collapseStatus(li)
+    }
+  }
+}
+
 function restoreAllStatuses() {
   for (const content of select.all(`.content[${ATTRIBUTE_MARKER}]`)) {
     restoreStatusContent(content)
@@ -151,6 +159,7 @@ export default context => {
     onLoad() {
       timelineElementObserver.addCallback(mutationObserverCallback)
       on('click', SELECTOR_TOGGLE, onClickToggle)
+      collapseExistingStatuses()
     },
 
     onUnload() {
