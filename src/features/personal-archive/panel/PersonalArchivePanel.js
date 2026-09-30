@@ -24,10 +24,28 @@ const permissionLabels = {
   granted: '已允许',
   denied: '已拒绝',
 }
+const SETTINGS_TAB_URL = 'settings.html#personal-archive'
+
+/**
+ * 同步循环活在这个组件里。扩展图标弹出的设置页是 action popup，一失焦就被浏览器
+ * 销毁，组件连同同步一起没了——用户看到的就是「备份莫名其妙停住」。
+ *
+ * chrome.tabs.getCurrent() 在 popup 里返回 undefined，在标签页里返回该标签页，
+ * 这是区分两者的官方办法。popup 里只显示进度、不开工。
+ */
+async function detectRunningInPopup() {
+  try {
+    return !await chrome.tabs.getCurrent()
+  } catch (error) {
+    // 拿不准时按标签页处理：宁可让用户点了没反应，也不要把能用的入口藏掉。
+    return false
+  }
+}
 
 export default class PersonalArchivePanel extends Component {
   state = {
     loading: true,
+    isPopup: false,
     working: false,
     pauseRequested: false,
     directoryName: null,
@@ -43,8 +61,19 @@ export default class PersonalArchivePanel extends Component {
   directoryHandle = null
 
   componentDidMount() {
+    this.detectSurface()
     this.restoreDirectory()
     this.loadAuthorizedAccount()
+  }
+
+  async detectSurface() {
+    this.setState({ isPopup: await detectRunningInPopup() })
+  }
+
+  handleOpenInTab = async () => {
+    await chrome.tabs.create({ url: chrome.runtime.getURL(SETTINGS_TAB_URL) })
+    // 弹窗留着也没用了，而且它盖在新标签页前面。
+    window.close()
   }
 
   // 备份跟着 OAuth 授权走，不跟着网页登录走。多账号用户在网页切了号以后，
@@ -311,11 +340,68 @@ export default class PersonalArchivePanel extends Component {
     return ` 另有未授权域名被跳过：${summary}，请把它反馈给开发者。`
   }
 
+  // 弹窗一关同步就断，所以这里不给任何会开工的按钮，只把人送到标签页去。
+  renderPopupNotice() {
+    return (
+      <div className="sf-personal-archive-panel__popup-notice">
+        <p>
+          <strong>备份不能在这个弹窗里进行。</strong>
+          这个弹窗一失去焦点就会被浏览器关掉，正在跑的备份会跟着中断。
+          请在标签页里操作，中途切走也不会断。
+        </p>
+        <div className="sf-personal-archive-panel__actions">
+          <button type="button" onClick={this.handleOpenInTab}>
+            在标签页中打开备份
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  renderActions() {
+    const { working, pauseRequested, directoryName, meta } = this.state
+
+    return (
+      <div className="sf-personal-archive-panel__actions">
+        <button type="button" disabled={working} onClick={this.handleChooseDirectory}>
+          { directoryName ? '更换备份文件夹' : '选择备份文件夹' }
+        </button>
+        <button
+          type="button"
+          disabled={!directoryName || working}
+          onClick={this.handleStartSync}
+        >
+          { this.getSyncButtonLabel() }
+        </button>
+        <button
+          type="button"
+          disabled={!working || pauseRequested}
+          onClick={this.handlePause}
+        >
+          { pauseRequested ? '将在本页完成后暂停…' : '暂停' }
+        </button>
+        <button
+          type="button"
+          disabled={!directoryName || working || !meta}
+          onClick={this.handleDownloadMedia}
+        >
+          下载图片
+        </button>
+        <button
+          type="button"
+          disabled={!directoryName || working || !meta}
+          onClick={this.handleBuildOffline}
+        >
+          生成离线页面
+        </button>
+      </div>
+    )
+  }
+
   render() {
     const {
       loading,
-      working,
-      pauseRequested,
+      isPopup,
       directoryName,
       meta,
       progress,
@@ -331,47 +417,15 @@ export default class PersonalArchivePanel extends Component {
         { this.renderAuthorizedAccount() }
 
         { loading && <p>正在读取备份文件夹…</p> }
-        { !loading && (
+        { !loading && (isPopup ? this.renderPopupNotice() : (
           <div>
             <p>
               备份文件夹：{ directoryName || '尚未选择' }
               { directoryName && `（权限：${this.getPermissionLabel()}）` }
             </p>
-            <div className="sf-personal-archive-panel__actions">
-              <button type="button" disabled={working} onClick={this.handleChooseDirectory}>
-                { directoryName ? '更换备份文件夹' : '选择备份文件夹' }
-              </button>
-              <button
-                type="button"
-                disabled={!directoryName || working}
-                onClick={this.handleStartSync}
-              >
-                { this.getSyncButtonLabel() }
-              </button>
-              <button
-                type="button"
-                disabled={!working || pauseRequested}
-                onClick={this.handlePause}
-              >
-                { pauseRequested ? '将在本页完成后暂停…' : '暂停' }
-              </button>
-              <button
-                type="button"
-                disabled={!directoryName || working || !meta}
-                onClick={this.handleDownloadMedia}
-              >
-                下载图片
-              </button>
-              <button
-                type="button"
-                disabled={!directoryName || working || !meta}
-                onClick={this.handleBuildOffline}
-              >
-                生成离线页面
-              </button>
-            </div>
+            { this.renderActions() }
           </div>
-        ) }
+        )) }
 
         { meta && (
           <ul className="sf-personal-archive-panel__summary">

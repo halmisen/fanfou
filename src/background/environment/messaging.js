@@ -26,7 +26,9 @@ function createMessageHandler(port) {
 
     if (handler) {
       try {
-        respondedMessage = await handler(message.payload)
+        // 第二个参数是 port.sender，需要知道消息来自哪个标签页/窗口的 handler 才用得上
+        // （例如关闭分享弹窗）。老 handler 只声明一个形参，多传一个不影响它们。
+        respondedMessage = await handler(message.payload, port.sender)
       } catch (error) {
         log.error(error)
       }
