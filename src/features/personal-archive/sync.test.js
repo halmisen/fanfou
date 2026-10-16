@@ -1,6 +1,7 @@
 /* eslint camelcase: off */
 
 import syncOwnTimeline, { syncStatusStream } from './sync'
+import { createArchiveMeta, finishBackfill } from './checkpoint'
 
 function rawStatus(id, createdAt) {
   return {
@@ -10,6 +11,44 @@ function rawStatus(id, createdAt) {
     user: { id: 'me', screen_name: 'me', name: 'Me' },
   }
 }
+
+test('new messages sync while an unfinished favorite backup retains its disk checkpoint for later resume', async () => {
+  const account = { id: 'me', name: 'Me' }
+  const now = '2026-08-13T00:00:00.000Z'
+  let diskMeta = finishBackfill(createArchiveMeta(account, now), now)
+  diskMeta.watermark.statuses.newestId = 'old-message'
+  const favoriteRun = { resource: 'favorites', mode: 'backfill', nextMaxId: 'saved-favorite', committedPages: 2 }
+  diskMeta.activeRun = favoriteRun
+  const store = {
+    readMeta: () => Promise.resolve(JSON.parse(JSON.stringify(diskMeta))),
+    writeMeta(value) {
+      diskMeta = JSON.parse(JSON.stringify(value))
+      return Promise.resolve()
+    },
+    commitStatusPage: jest.fn(({ meta, statuses }) => {
+      diskMeta = { ...meta, counts: { ...meta.counts, statuses: statuses.length } }
+      return Promise.resolve(diskMeta)
+    }),
+  }
+  const timeline = jest.fn().mockResolvedValue([
+    rawStatus('new-message', 'Wed Aug 12 12:00:00 +0000 2026'),
+    rawStatus('old-message', 'Wed Aug 12 11:00:00 +0000 2026'),
+  ])
+
+  await syncOwnTimeline({ account, store, fetchPage: timeline })
+
+  expect(diskMeta.activeRun).toBeNull()
+  expect(diskMeta.pendingRuns.favorites).toEqual(favoriteRun)
+  expect(diskMeta.watermark.statuses.newestId).toBe('new-message')
+  expect(store.commitStatusPage.mock.calls[0][0].statuses.map(status => status.id)).toEqual([ 'new-message' ])
+
+  const favorites = jest.fn().mockResolvedValue([])
+  await syncStatusStream({ account, store, resource: 'favorites', archiveSource: 'favorite', fetchPage: favorites })
+
+  expect(favorites).toHaveBeenCalledWith({ count: 60, max_id: 'saved-favorite' })
+  expect(diskMeta.activeRun).toBeNull()
+  expect(diskMeta.pendingRuns.favorites).toBeUndefined()
+})
 
 test('initial backfill commits each page before advancing an exclusive max_id cursor', async () => {
   const events = []

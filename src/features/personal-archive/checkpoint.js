@@ -66,6 +66,33 @@ function getResourceWatermark(meta, resource) {
   return meta.watermark?.[resource] || emptyWatermark()
 }
 
+// activeRun 是上次操作的任务，不代表它仍在执行。切换归档种类时保留完整断点，
+// 尤其不能丢掉增量同步的 stopAnchorId，或私信的会话和页码。
+export function selectArchiveRun(meta, resource) {
+  if (!meta || meta.activeRun?.resource === resource) return meta
+  if (!meta.activeRun && !meta.pendingRuns?.[resource]) return meta
+
+  const pendingRuns = { ...(meta.pendingRuns || {}) }
+  if (meta.activeRun) pendingRuns[meta.activeRun.resource] = meta.activeRun
+  const activeRun = pendingRuns[resource] || null
+  delete pendingRuns[resource]
+
+  return { ...meta, activeRun, pendingRuns }
+}
+
+export function assertArchiveAccount(meta, account) {
+  if (meta.account?.id !== account.id) {
+    // 这句会原样显示给用户，所以写成能直接照做的中文。
+    // 多账号用户最容易撞上：网页切了账号，但 OAuth 授权还是原来那个。
+    const found = meta.account?.name || meta.account?.id || '未知账号'
+    const current = account.name || account.id
+    throw new Error(
+      `这个文件夹是「${found}」的备份，当前授权账号是「${current}」。`
+      + '换一个空文件夹备份当前账号，或先到「API 接入」重新授权回原来的账号。',
+    )
+  }
+}
+
 export function resumeOrStartSync(meta, account, now, resource = 'statuses') {
   if (!meta) {
     const initialMeta = createArchiveMeta(account, now)
@@ -82,18 +109,9 @@ export function resumeOrStartSync(meta, account, now, resource = 'statuses') {
       },
     }
   }
-  if (meta.account?.id !== account.id) {
-    // 这句会原样显示给用户，所以写成能直接照做的中文。
-    // 多账号用户最容易撞上：网页切了账号，但 OAuth 授权还是原来那个。
-    const found = meta.account?.name || meta.account?.id || '未知账号'
-    const current = account.name || account.id
-    throw new Error(
-      `这个文件夹是「${found}」的备份，当前授权账号是「${current}」。`
-      + '换一个空文件夹备份当前账号，或先到「API 接入」重新授权回原来的账号。',
-    )
-  }
+  assertArchiveAccount(meta, account)
   const resourceMeta = {
-    ...meta,
+    ...selectArchiveRun(meta, resource),
     watermark: {
       ...(meta.watermark || {}),
       [resource]: getResourceWatermark(meta, resource),
@@ -109,9 +127,6 @@ export function resumeOrStartSync(meta, account, now, resource = 'statuses') {
   }
   // 续传：上一轮的停止原因已经交代过了，这一轮重新开始计时。
   if (resourceMeta.activeRun) {
-    if (resourceMeta.activeRun.resource !== resource) {
-      throw new Error('另一个归档任务尚未完成，请先继续或结束它后再开始新的归档。')
-    }
     return {
       ...resourceMeta,
       activeRun: {

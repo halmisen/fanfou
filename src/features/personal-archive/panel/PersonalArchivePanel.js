@@ -32,6 +32,12 @@ const permissionLabels = {
   granted: '已允许',
   denied: '已拒绝',
 }
+const resourceLabels = {
+  statuses: '消息',
+  mentions: '提及',
+  favorites: '收藏',
+  directMessages: '私信',
+}
 
 export default class PersonalArchivePanel extends Component {
   state = {
@@ -437,7 +443,7 @@ export default class PersonalArchivePanel extends Component {
 
     return (
       <Fragment>
-        <li>检测到未完成同步，可从已提交水位继续。{ reasonText }</li>
+        <li>检测到未完成的{resourceLabels[activeRun.resource] || '归档'}同步，可从已提交水位继续。{ reasonText }也可以先同步其他种类，原进度会保留。</li>
         <li>
           上次进度：已提交 { committedPages || 0 } 页
           { nextMaxId && `，下一页游标 ${nextMaxId}` }
@@ -454,33 +460,37 @@ export default class PersonalArchivePanel extends Component {
 
   getSyncButtonLabel() {
     const { meta } = this.state
-    if (meta?.activeRun?.resource === 'statuses') return '继续上次同步'
+    if (this.getUnfinishedRun('statuses')) return '继续上次同步'
     if (meta?.watermark?.statuses?.reachedFirstEver) return '同步新消息'
     return '开始完整同步'
   }
 
   getMentionButtonLabel() {
     const { meta } = this.state
-    if (meta?.activeRun?.resource === 'mentions') return '继续提及同步'
+    if (this.getUnfinishedRun('mentions')) return '继续提及同步'
     if (meta?.watermark?.mentions?.reachedFirstEver) return '同步新的提及'
     return '同步收到的提及'
   }
 
   getDirectMessageButtonLabel() {
-    const { meta } = this.state
-    if (meta?.activeRun?.resource === 'directMessages') return '继续私信同步'
+    if (this.getUnfinishedRun('directMessages')) return '继续私信同步'
     return '备份私信'
   }
 
   getFavoriteButtonLabel() {
     const { meta } = this.state
-    if (meta?.activeRun?.resource === 'favorites') return '继续收藏同步'
+    if (this.getUnfinishedRun('favorites')) return '继续收藏同步'
     if (meta?.watermark?.favorites?.reachedFirstEver) return '同步新的收藏'
     return '同步收藏'
   }
 
   getPermissionLabel() {
     return permissionLabels[this.state.permission] || '未知'
+  }
+
+  getUnfinishedRun(resource) {
+    const { meta } = this.state
+    return meta?.activeRun?.resource === resource ? meta.activeRun : meta?.pendingRuns?.[resource]
   }
 
   renderDirectMessageProbeReceipt(receipt) {
@@ -620,28 +630,28 @@ export default class PersonalArchivePanel extends Component {
               </button>
               <button
                 type="button"
-                disabled={!directoryName || working || Boolean(meta?.activeRun && meta.activeRun.resource !== 'statuses')}
+                disabled={!directoryName || working}
                 onClick={this.handleStartSync}
               >
                 { this.getSyncButtonLabel() }
               </button>
               <button
                 type="button"
-                disabled={!directoryName || working || Boolean(meta?.activeRun && meta.activeRun.resource !== 'mentions')}
+                disabled={!directoryName || working}
                 onClick={this.handleStartMentions}
               >
                 { this.getMentionButtonLabel() }
               </button>
               <button
                 type="button"
-                disabled={!directoryName || working || Boolean(meta?.activeRun && meta.activeRun.resource !== 'favorites')}
+                disabled={!directoryName || working}
                 onClick={this.handleStartFavorites}
               >
                 { this.getFavoriteButtonLabel() }
               </button>
               <button
                 type="button"
-                disabled={!directoryName || working || Boolean(meta?.activeRun && meta.activeRun.resource !== 'directMessages')}
+                disabled={!directoryName || working}
                 onClick={this.handleStartDirectMessages}
               >
                 { this.getDirectMessageButtonLabel() }
@@ -697,6 +707,7 @@ export default class PersonalArchivePanel extends Component {
             <li>已落盘私信：{ meta.counts?.directMessages || 0 } 条（{ meta.directMessages?.conversationCount || 0 } 个会话）</li>
             <li>最近完成私信同步：{ meta.lastSyncedAtByResource?.directMessages || '尚未完成完整同步' }</li>
             { meta.activeRun && this.renderUnfinishedRun(meta.activeRun) }
+            { Object.values(meta.pendingRuns || {}).map(run => this.renderUnfinishedRun(run)) }
           </ul>
         ) }
 

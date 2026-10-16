@@ -52,6 +52,13 @@ describe('toSummary', () => {
     expect(summary.hasUnfinishedRun).toBe(true)
   })
 
+  test('当前同步完成后仍显示暂存的收藏任务', () => {
+    const summary = toSummary({ ...META, activeRun: null, pendingRuns: { favorites: { resource: 'favorites' } } })
+
+    expect(summary.hasUnfinishedRun).toBe(true)
+    expect(formatSummaryText(summary)).toBe('已备份 23281 条，还有未完成的同步')
+  })
+
   test('计数缺失时归零而不是 undefined', () => {
     expect(toSummary({}).statuses).toBe(0)
   })

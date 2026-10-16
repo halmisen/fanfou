@@ -1,5 +1,6 @@
 import createDirectMessageStore from './directMessageStore'
 import { getConversationUserId } from './directMessageRecords'
+import { assertArchiveAccount, createArchiveMeta, selectArchiveRun } from './checkpoint'
 
 const PAGE_SIZE = 60
 const REQUEST_INTERVAL_MS = 500
@@ -10,7 +11,10 @@ const RETRYABLE_ERROR_NAMES = new Set([ 'NoModificationAllowedError', 'InvalidSt
 
 const sleepDefault = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 
-function startRun(meta, now) {
+function startRun(initialMeta, account, now) {
+  const archiveMeta = initialMeta || { ...createArchiveMeta(account, now), activeRun: null }
+  assertArchiveAccount(archiveMeta, account)
+  const meta = selectArchiveRun(archiveMeta, 'directMessages')
   if (meta?.activeRun?.resource === 'directMessages') {
     const activeRun = { ...meta.activeRun }
     delete activeRun.stopReason
@@ -18,7 +22,6 @@ function startRun(meta, now) {
     delete activeRun.lastError
     return { ...meta, activeRun }
   }
-  if (meta?.activeRun) throw new Error('另一个归档同步尚未完成，请先继续或结束它')
 
   return {
     ...(meta || {}),
@@ -119,7 +122,7 @@ export default async function syncDirectMessages({
   onRetry = () => undefined,
 }) {
   const dmStore = createDirectMessageStore(store)
-  let meta = startRun(await store.readMeta(), clock().toISOString())
+  let meta = startRun(await store.readMeta(), account, clock().toISOString())
   await store.writeMeta(meta)
 
   try {

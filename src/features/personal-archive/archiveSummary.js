@@ -26,7 +26,7 @@ export function toSummary(meta, {
     statuses: meta.counts?.statuses || 0,
     lastSyncedAt: meta.lastSyncedAt || null,
     reachedFirstEver: Boolean(meta.watermark?.statuses?.reachedFirstEver),
-    hasUnfinishedRun: Boolean(meta.activeRun),
+    hasUnfinishedRun: Boolean(meta.activeRun || Object.keys(meta.pendingRuns || {}).length),
     isRunning,
     updatedAt,
     directoryName,

@@ -1,6 +1,7 @@
 /* eslint camelcase: off */
 
 import syncDirectMessages from './directMessageSync'
+import { createArchiveMeta, resumeOrStartSync } from './checkpoint'
 
 jest.mock('./directMessageStore', () => jest.fn())
 
@@ -13,6 +14,52 @@ function conversation(otherid) {
 function message(id) {
   return { id, created_at: 'Wed Aug 12 12:00:00 +0000 2026', text: `private-${id}` }
 }
+
+test('private-message resume points survive a timeline sync and another unfinished favorite run', async () => {
+  const account = { id: 'me' }
+  let meta = createArchiveMeta(account, '2026-08-13T00:00:00.000Z')
+  const dmRun = {
+    resource: 'directMessages', nextConversationId: 'a', nextMessagePage: 3, committedPages: 2,
+  }
+  meta.activeRun = dmRun
+  meta = resumeOrStartSync(meta, account, '2026-08-13T00:00:00.000Z', 'statuses')
+  const statusRun = meta.activeRun
+  const favoriteRun = { resource: 'favorites', nextMaxId: 'favorite-cursor' }
+  meta.pendingRuns.favorites = favoriteRun
+  const store = {
+    readMeta: () => Promise.resolve(meta),
+    writeMeta(value) {
+      meta = value
+      return Promise.resolve()
+    },
+  }
+  const client = {
+    fetchDirectMessageConversationList: jest.fn()
+      .mockResolvedValueOnce([ conversation('a') ])
+      .mockResolvedValueOnce([]),
+    fetchDirectMessageConversation: jest.fn().mockResolvedValue([]),
+  }
+  createDirectMessageStore.mockReturnValue({})
+
+  await syncDirectMessages({ account, client, store, sleep: () => Promise.resolve() })
+
+  expect(client.fetchDirectMessageConversation).toHaveBeenCalledWith('a', { count: 60, page: 3 })
+  expect(meta.activeRun).toBeNull()
+  expect(meta.pendingRuns).toEqual({ statuses: statusRun, favorites: favoriteRun })
+})
+
+test('switching to private messages checks account ownership before changing any checkpoint', async () => {
+  const meta = createArchiveMeta({ id: 'original-account' }, '2026-08-13T00:00:00.000Z')
+  const store = { readMeta: jest.fn().mockResolvedValue(meta), writeMeta: jest.fn() }
+  const client = { fetchDirectMessageConversationList: jest.fn() }
+
+  await expect(syncDirectMessages({ account: { id: 'other-account' }, client, store }))
+    .rejects.toThrow('当前授权账号')
+
+  expect(store.writeMeta).not.toHaveBeenCalled()
+  expect(client.fetchDirectMessageConversationList).not.toHaveBeenCalled()
+  expect(meta.activeRun.resource).toBe('statuses')
+})
 
 test('direct-message sync commits each conversation page before its resume point advances', async () => {
   let meta = null
