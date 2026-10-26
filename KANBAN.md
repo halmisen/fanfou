@@ -49,6 +49,13 @@
 - Chrome Web Store 路线：先移除或替换 MV3 禁止的远程 Google Analytics 代码。
 - `docs/spec-undo-status.md` 与 `docs/spec-annual-report.md` 的后续实现。
 
+## 改进待办（来源：2026-10-26 只读审视，未实施）
+
+1. 真实登录态验收做成仓库 CLI（up/login/feature/shot，JSON 输出），并抽出 fixture e2e helper；证据 `lessons.md:83`、`reference/project-history.md:74`、`tests/playwright/personal-archive-sync.spec.ts:18`。
+2. 修 CI：矩阵仍是 Node 10/12/13，`gh run list --branch 2026.8` 为空；证据 `.github/workflows/nodejs.yml:12`。
+3. 由 `src/features/*/metadata.js` 生成功能地图（含有无测试、用户入口列），37 个功能中 33 个无测试；证据 `src/features/`、`README.md:11`。
+4. 清理状态漂移与根目录遗留：本文件「本轮进展」称修复未提交（已在 `a63032e`），`docs/project-status.md` 过时，根目录有 `--full-page` 等调试遗留，探针 spec 混入 Playwright；证据 `git ls-files`、`tests/playwright/probe.spec.ts:3`。
+
 ## 记录规则
 
 - 长期决定见 `reference/logic.md`；开放风险见 `reference/risks.md`；防错规则见 `lessons.md`。
