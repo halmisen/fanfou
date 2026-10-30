@@ -145,18 +145,34 @@ export default class PersonalArchivePanel extends Component {
 
       this.directoryHandle = directoryHandle
       const permission = await queryDirectoryWritePermission(directoryHandle)
-      const meta = await createFileSystemArchiveStore(directoryHandle).readMeta()
       this.setState({
         loading: false,
         directoryName: directoryHandle.name,
         permission,
-        meta,
       })
+      if (permission === 'granted') {
+        const meta = await createFileSystemArchiveStore(directoryHandle).readMeta()
+        this.setState({ meta })
+      }
     } catch (error) {
       this.setState({
         loading: false,
         error: this.getErrorMessage(error),
       })
+    }
+  }
+
+  handleRestorePermission = async () => {
+    if (!this.directoryHandle || this.state.working) return
+    this.setState({ working: true, error: null })
+    try {
+      const permission = await requestDirectoryWritePermission(this.directoryHandle)
+      this.setState({ permission })
+      if (permission !== 'granted') throw new Error('没有获得备份文件夹访问权限，请允许访问后重试')
+      const meta = await createFileSystemArchiveStore(this.directoryHandle).readMeta()
+      this.setState({ meta, working: false })
+    } catch (error) {
+      this.setState({ working: false, error: this.getErrorMessage(error) })
     }
   }
 
@@ -628,6 +644,11 @@ export default class PersonalArchivePanel extends Component {
               <button type="button" disabled={working} onClick={this.handleChooseDirectory}>
                 { directoryName ? '更换备份文件夹' : '选择备份文件夹' }
               </button>
+              { directoryName && this.state.permission !== 'granted' && (
+                <button type="button" disabled={working} onClick={this.handleRestorePermission}>
+                  授权访问备份文件夹
+                </button>
+              ) }
               <button
                 type="button"
                 disabled={!directoryName || working}
