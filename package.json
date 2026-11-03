@@ -15,6 +15,7 @@
     "lint:css": "stylelint '**/*.(less|css)'",
     "unit": "BABEL_ENV=test jest",
     "unit:dev": "BABEL_ENV=test jest --watch",
+    "verify:smoke": "node scripts/verify-archive-smoke.mjs --json",
     "cleanup": "rimraf dist && mkdirp dist",
     "dev": "npm run cleanup && webpack --watch --mode development --config build/webpack.config.js",
     "build": "npm run cleanup && webpack --mode production --config build/webpack.config.js",
