@@ -31,3 +31,4 @@ debug-*
 bug/
 settings_page_debug.png
 space-fanfou-*.tar.gz
+.env
